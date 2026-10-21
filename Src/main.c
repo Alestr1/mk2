@@ -2,7 +2,7 @@
 /**
   ******************************************************************************
   * @file           : main.c
-  * @brief          : Main program body (МК2 Вариант 2: Таймер со звуком)
+  * @brief          : Main program body (МК2 Вариант 2: Таймер, ЧЧ:ММ:СС, валидация)
   ******************************************************************************
   */
 /* USER CODE END Header */
@@ -29,9 +29,13 @@
 #define STATE_ALARM  2
 
 uint8_t timer_state = STATE_SET;
-uint32_t timer_value = 0;
+uint32_t timer_value = 0; // Общее время в секундах для обратного отсчета
 uint32_t last_tick = 0;
 uint32_t beep_tick = 0;
+
+// Переменные для ввода времени в формате ЧЧ:ММ:СС
+uint32_t input_raw = 0;
+uint8_t input_digits = 0;
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -39,18 +43,55 @@ void SystemClock_Config(void);
 /* USER CODE BEGIN PFP */
 char get_key_pressed(void);
 void update_display(void);
-void format_num(uint32_t num, char* buf);
+void format_hms_input(uint32_t raw, uint8_t digits, char* buf);
+void format_hms_total(uint32_t total_sec, char* buf);
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
 
-void format_num(uint32_t num, char* buf) {
-    buf[0] = '0' + (num / 1000) % 10;
-    buf[1] = '0' + (num / 100) % 10;
-    buf[2] = '0' + (num / 10) % 10;
-    buf[3] = '0' + num % 10;
-    buf[4] = '\0';
+// Форматирование вводимых данных в строку ЧЧ:ММ:СС
+void format_hms_input(uint32_t raw, uint8_t digits, char* buf) {
+    uint32_t h = 0, m = 0, s = 0;
+    if (digits == 1 || digits == 2) {
+        s = raw;
+    } else if (digits == 3 || digits == 4) {
+        m = raw / 100;
+        s = raw % 100;
+    } else if (digits == 5 || digits == 6) {
+        h = raw / 10000;
+        m = (raw / 100) % 100;
+        s = raw % 100;
+    }
+
+    buf[0] = '0' + (h / 10) % 10;
+    buf[1] = '0' + h % 10;
+    buf[2] = ':';
+    buf[3] = '0' + (m / 10) % 10;
+    buf[4] = '0' + m % 10;
+    buf[5] = ':';
+    buf[6] = '0' + (s / 10) % 10;
+    buf[7] = '0' + s % 10;
+    buf[8] = '\0';
+}
+
+// Форматирование общего количества секунд в строку ЧЧ:ММ:СС для отображения при отсчете
+void format_hms_total(uint32_t total_sec, char* buf) {
+    uint32_t h = total_sec / 3600;
+    uint32_t m = (total_sec % 3600) / 60;
+    uint32_t s = total_sec % 60;
+
+    if (h > 99) h = 99; // Защита от переполнения разрядов на дисплее
+
+    buf[0] = '0' + (h / 10) % 10;
+    buf[1] = '0' + h % 10;
+    buf[2] = ':';
+    buf[3] = '0' + (m / 10) % 10;
+    buf[4] = '0' + m % 10;
+    buf[5] = ':';
+    buf[6] = '0' + (s / 10) % 10;
+    buf[7] = '0' + s % 10;
+    buf[8] = '\0';
 }
 
 char get_key_pressed(void) {
@@ -82,23 +123,22 @@ char get_key_pressed(void) {
 }
 
 void update_display(void) {
-    char num_buf[5];
-    format_num(timer_value, num_buf);
+    char time_buf[9]; // Формат "HH:MM:SS\0"
 
     oled_Fill(Black);
     oled_SetCursor(0, 0);
     
     if (timer_state == STATE_SET) {
+        format_hms_input(input_raw, input_digits, time_buf);
         oled_WriteString("SET: ", Font_7x10, White);
-        oled_WriteString(num_buf, Font_7x10, White);
-        oled_WriteString(" s", Font_7x10, White);
+        oled_WriteString(time_buf, Font_7x10, White);
         oled_SetCursor(0, 20);
         oled_WriteString("#:Start  *:Clear", Font_7x10, White);
     } 
     else if (timer_state == STATE_RUN) {
+        format_hms_total(timer_value, time_buf);
         oled_WriteString("RUN: ", Font_7x10, White);
-        oled_WriteString(num_buf, Font_7x10, White);
-        oled_WriteString(" s", Font_7x10, White);
+        oled_WriteString(time_buf, Font_7x10, White);
     } 
     else if (timer_state == STATE_ALARM) {
         oled_WriteString("TIME IS UP!", Font_7x10, White);
@@ -127,11 +167,10 @@ int main(void)
   MX_USART6_UART_Init();
   
   /* USER CODE BEGIN 2 */
-  // 1. Инициализация клавиатуры и дисплея
   Set_Keyboard();
   oled_Init();
 
-  // 2. Настройка пина динамика (PE9) как выход
+  // Настройка пина динамика (PE9) как выход
   __HAL_RCC_GPIOE_CLK_ENABLE();
   GPIO_InitTypeDef GPIO_InitStruct = {0};
   GPIO_InitStruct.Pin = GPIO_PIN_9;
@@ -150,42 +189,86 @@ int main(void)
   {
     char key = get_key_pressed();
 
-    // --- 1. Обработка кнопок ---
     if (key != '\0') {
         if (timer_state == STATE_SET) {
             if (key >= '0' && key <= '9') {
-                timer_value = timer_value * 10 + (key - '0');
-                if (timer_value > 9999) timer_value = 9999;
+                if (input_digits < 6) {
+                    input_raw = input_raw * 10 + (key - '0');
+                    input_digits++;
+                }
                 update_display();
             } 
-            else if (key == '#' && timer_value > 0) {
-                timer_state = STATE_RUN;
-                last_tick = HAL_GetTick();
-                update_display();
+            else if (key == '#') {
+                // 1. Парсинг введенных данных
+                uint32_t h = 0, m = 0, s = 0;
+                uint8_t is_valid = 1;
+
+                if (input_digits == 1 || input_digits == 2) {
+                    s = input_raw;
+                    if (s >= 60) is_valid = 0;
+                } else if (input_digits == 3 || input_digits == 4) {
+                    m = input_raw / 100;
+                    s = input_raw % 100;
+                    if (m >= 60 || s >= 60) is_valid = 0;
+                } else if (input_digits == 5 || input_digits == 6) {
+                    h = input_raw / 10000;
+                    m = (input_raw / 100) % 100;
+                    s = input_raw % 100;
+                    if (m >= 60 || s >= 60) is_valid = 0;
+                } else {
+                    is_valid = 0; // Ничего не введено
+                }
+
+                // 2. Проверка валидности и запуск
+                if (is_valid) {
+                    timer_value = (h * 3600) + (m * 60) + s;
+                    if (timer_value > 0) {
+                        timer_state = STATE_RUN;
+                        last_tick = HAL_GetTick();
+                        update_display();
+                    } else {
+                        // Если ввели 00:00:00 и нажали #, просто очищаем
+                        input_raw = 0;
+                        input_digits = 0;
+                        update_display();
+                    }
+                } else {
+                    // НЕВЕРНЫЙ ВВОД (минуты или секунды >= 60)
+                    // Очищаем буфер ввода и обновляем экран (вернется к 00:00:00)
+                    input_raw = 0;
+                    input_digits = 0;
+                    update_display();
+                }
             } 
             else if (key == '*') {
+                input_raw = 0;
+                input_digits = 0;
                 timer_value = 0;
                 update_display();
             }
         } 
         else if (timer_state == STATE_RUN) {
-            if (key == '*') { // Сброс во время работы
+            if (key == '*') {
                 timer_state = STATE_SET;
                 timer_value = 0;
+                input_raw = 0;
+                input_digits = 0;
                 update_display();
             }
         } 
         else if (timer_state == STATE_ALARM) {
-            if (key == '*') { // Сброс сирены
+            if (key == '*') {
                 timer_state = STATE_SET;
                 timer_value = 0;
+                input_raw = 0;
+                input_digits = 0;
                 HAL_GPIO_WritePin(GPIOE, GPIO_PIN_9, GPIO_PIN_RESET); // Выкл звук
                 update_display();
             }
         }
     }
 
-    // --- 2. Логика обратного отсчета (неблокирующая) ---
+    // Логика обратного отсчета (неблокирующая)
     if (timer_state == STATE_RUN) {
         if (HAL_GetTick() - last_tick >= 1000) {
             last_tick += 1000;
@@ -200,9 +283,8 @@ int main(void)
         }
     }
 
-    // --- 3. Генерация звука (программный меандр ~500 Гц) ---
+    // Генерация звука (программный меандр ~500 Гц)
     if (timer_state == STATE_ALARM) {
-        // Переключаем пин каждые 1 мс (период 2 мс = 500 Гц)
         if (HAL_GetTick() - beep_tick > 1) {
             beep_tick = HAL_GetTick();
             HAL_GPIO_TogglePin(GPIOE, GPIO_PIN_9);
