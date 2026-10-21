@@ -14,9 +14,11 @@ C_SRCS += \
 ../Src/pca9538.c \
 ../Src/sdk_uart.c \
 ../Src/stm32f4xx_hal_msp.c \
+../Src/stm32f4xx_hal_tim.c \
 ../Src/stm32f4xx_it.c \
 ../Src/syscalls.c \
 ../Src/system_stm32f4xx.c \
+../Src/tim.c \
 ../Src/usart.c 
 
 OBJS += \
@@ -29,9 +31,11 @@ OBJS += \
 ./Src/pca9538.o \
 ./Src/sdk_uart.o \
 ./Src/stm32f4xx_hal_msp.o \
+./Src/stm32f4xx_hal_tim.o \
 ./Src/stm32f4xx_it.o \
 ./Src/syscalls.o \
 ./Src/system_stm32f4xx.o \
+./Src/tim.o \
 ./Src/usart.o 
 
 C_DEPS += \
@@ -44,9 +48,11 @@ C_DEPS += \
 ./Src/pca9538.d \
 ./Src/sdk_uart.d \
 ./Src/stm32f4xx_hal_msp.d \
+./Src/stm32f4xx_hal_tim.d \
 ./Src/stm32f4xx_it.d \
 ./Src/syscalls.d \
 ./Src/system_stm32f4xx.d \
+./Src/tim.d \
 ./Src/usart.d 
 
 
@@ -57,7 +63,7 @@ Src/%.o Src/%.su Src/%.cyclo: ../Src/%.c Src/subdir.mk
 clean: clean-Src
 
 clean-Src:
-	-$(RM) ./Src/fonts.cyclo ./Src/fonts.d ./Src/fonts.o ./Src/fonts.su ./Src/gpio.cyclo ./Src/gpio.d ./Src/gpio.o ./Src/gpio.su ./Src/i2c.cyclo ./Src/i2c.d ./Src/i2c.o ./Src/i2c.su ./Src/kb.cyclo ./Src/kb.d ./Src/kb.o ./Src/kb.su ./Src/main.cyclo ./Src/main.d ./Src/main.o ./Src/main.su ./Src/oled.cyclo ./Src/oled.d ./Src/oled.o ./Src/oled.su ./Src/pca9538.cyclo ./Src/pca9538.d ./Src/pca9538.o ./Src/pca9538.su ./Src/sdk_uart.cyclo ./Src/sdk_uart.d ./Src/sdk_uart.o ./Src/sdk_uart.su ./Src/stm32f4xx_hal_msp.cyclo ./Src/stm32f4xx_hal_msp.d ./Src/stm32f4xx_hal_msp.o ./Src/stm32f4xx_hal_msp.su ./Src/stm32f4xx_it.cyclo ./Src/stm32f4xx_it.d ./Src/stm32f4xx_it.o ./Src/stm32f4xx_it.su ./Src/syscalls.cyclo ./Src/syscalls.d ./Src/syscalls.o ./Src/syscalls.su ./Src/system_stm32f4xx.cyclo ./Src/system_stm32f4xx.d ./Src/system_stm32f4xx.o ./Src/system_stm32f4xx.su ./Src/usart.cyclo ./Src/usart.d ./Src/usart.o ./Src/usart.su
+	-$(RM) ./Src/fonts.cyclo ./Src/fonts.d ./Src/fonts.o ./Src/fonts.su ./Src/gpio.cyclo ./Src/gpio.d ./Src/gpio.o ./Src/gpio.su ./Src/i2c.cyclo ./Src/i2c.d ./Src/i2c.o ./Src/i2c.su ./Src/kb.cyclo ./Src/kb.d ./Src/kb.o ./Src/kb.su ./Src/main.cyclo ./Src/main.d ./Src/main.o ./Src/main.su ./Src/oled.cyclo ./Src/oled.d ./Src/oled.o ./Src/oled.su ./Src/pca9538.cyclo ./Src/pca9538.d ./Src/pca9538.o ./Src/pca9538.su ./Src/sdk_uart.cyclo ./Src/sdk_uart.d ./Src/sdk_uart.o ./Src/sdk_uart.su ./Src/stm32f4xx_hal_msp.cyclo ./Src/stm32f4xx_hal_msp.d ./Src/stm32f4xx_hal_msp.o ./Src/stm32f4xx_hal_msp.su ./Src/stm32f4xx_hal_tim.cyclo ./Src/stm32f4xx_hal_tim.d ./Src/stm32f4xx_hal_tim.o ./Src/stm32f4xx_hal_tim.su ./Src/stm32f4xx_it.cyclo ./Src/stm32f4xx_it.d ./Src/stm32f4xx_it.o ./Src/stm32f4xx_it.su ./Src/syscalls.cyclo ./Src/syscalls.d ./Src/syscalls.o ./Src/syscalls.su ./Src/system_stm32f4xx.cyclo ./Src/system_stm32f4xx.d ./Src/system_stm32f4xx.o ./Src/system_stm32f4xx.su ./Src/tim.cyclo ./Src/tim.d ./Src/tim.o ./Src/tim.su ./Src/usart.cyclo ./Src/usart.d ./Src/usart.o ./Src/usart.su
 
 .PHONY: clean-Src
 

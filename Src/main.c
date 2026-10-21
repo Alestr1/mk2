@@ -2,7 +2,7 @@
 /**
   ******************************************************************************
   * @file           : main.c
-  * @brief          : Main program body (МК2 Вариант 2: Таймер, ЧЧ:ММ:СС, валидация)
+  * @brief          : Main program body (Таймер ЧЧ:ММ:СС + Аппаратный ШИМ для PE9)
   ******************************************************************************
   */
 /* USER CODE END Header */
@@ -12,6 +12,7 @@
 #include "i2c.h"
 #include "usart.h"
 #include "gpio.h"
+#include "stm32f4xx_hal_tim.h"
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
@@ -29,13 +30,13 @@
 #define STATE_ALARM  2
 
 uint8_t timer_state = STATE_SET;
-uint32_t timer_value = 0; // Общее время в секундах для обратного отсчета
+uint32_t timer_value = 0;
 uint32_t last_tick = 0;
-uint32_t beep_tick = 0;
 
-// Переменные для ввода времени в формате ЧЧ:ММ:СС
 uint32_t input_raw = 0;
 uint8_t input_digits = 0;
+
+TIM_HandleTypeDef htim1;
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -45,12 +46,14 @@ char get_key_pressed(void);
 void update_display(void);
 void format_hms_input(uint32_t raw, uint8_t digits, char* buf);
 void format_hms_total(uint32_t total_sec, char* buf);
+void MX_TIM1_Init(void);
+void Buzzer_On(void);
+void Buzzer_Off(void);
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
 
-// Форматирование вводимых данных в строку ЧЧ:ММ:СС
 void format_hms_input(uint32_t raw, uint8_t digits, char* buf) {
     uint32_t h = 0, m = 0, s = 0;
     if (digits == 1 || digits == 2) {
@@ -75,13 +78,12 @@ void format_hms_input(uint32_t raw, uint8_t digits, char* buf) {
     buf[8] = '\0';
 }
 
-// Форматирование общего количества секунд в строку ЧЧ:ММ:СС для отображения при отсчете
 void format_hms_total(uint32_t total_sec, char* buf) {
     uint32_t h = total_sec / 3600;
     uint32_t m = (total_sec % 3600) / 60;
     uint32_t s = total_sec % 60;
 
-    if (h > 99) h = 99; // Защита от переполнения разрядов на дисплее
+    if (h > 99) h = 99;
 
     buf[0] = '0' + (h / 10) % 10;
     buf[1] = '0' + h % 10;
@@ -123,7 +125,7 @@ char get_key_pressed(void) {
 }
 
 void update_display(void) {
-    char time_buf[9]; // Формат "HH:MM:SS\0"
+    char time_buf[9];
 
     oled_Fill(Black);
     oled_SetCursor(0, 0);
@@ -147,19 +149,53 @@ void update_display(void) {
     }
     oled_UpdateScreen();
 }
+
+// --- ИНИЦИАЛИЗАЦИЯ TIM1 ДЛЯ ЗУММЕРА (PE9 = TIM1_CH1) ---
+void MX_TIM1_Init(void) {
+    __HAL_RCC_TIM1_CLK_ENABLE();
+    __HAL_RCC_GPIOE_CLK_ENABLE();
+
+    GPIO_InitTypeDef GPIO_InitStruct = {0};
+    GPIO_InitStruct.Pin = GPIO_PIN_9;
+    GPIO_InitStruct.Mode = GPIO_MODE_AF_PP;
+    GPIO_InitStruct.Pull = GPIO_NOPULL;
+    GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
+    GPIO_InitStruct.Alternate = GPIO_AF1_TIM1;
+    HAL_GPIO_Init(GPIOE, &GPIO_InitStruct);
+
+    htim1.Instance = TIM1; // <-- ИЗМЕНЕНО: TIM1
+    htim1.Init.Prescaler = 84 - 1;
+    htim1.Init.CounterMode = TIM_COUNTERMODE_UP;
+    htim1.Init.Period = 200 - 1;
+    htim1.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
+    htim1.Init.RepetitionCounter = 0;
+    HAL_TIM_PWM_Init(&htim1);
+
+    TIM_OC_InitTypeDef sConfigOC = {0};
+    sConfigOC.OCMode = TIM_OCMODE_PWM1;
+    sConfigOC.Pulse = 0;
+    sConfigOC.OCPolarity = TIM_OCPOLARITY_HIGH;
+    sConfigOC.OCNPolarity = TIM_OCNPOLARITY_HIGH;
+    sConfigOC.OCFastMode = TIM_OCFAST_DISABLE;
+    HAL_TIM_PWM_ConfigChannel(&htim1, &sConfigOC, TIM_CHANNEL_1);
+
+    HAL_TIM_PWM_Start(&htim1, TIM_CHANNEL_1);
+}
+
+void Buzzer_On(void) {
+    __HAL_TIM_SET_COMPARE(&htim1, TIM_CHANNEL_1, 100);
+}
+
+void Buzzer_Off(void) {
+    __HAL_TIM_SET_COMPARE(&htim1, TIM_CHANNEL_1, 0);
+}
 /* USER CODE END 0 */
 
-/**
-  * @brief  The application entry point.
-  * @retval int
-  */
 int main(void)
 {
   /* USER CODE BEGIN 1 */
-
   /* USER CODE END 1 */
 
-  /* MCU Configuration--------------------------------------------------------*/
   HAL_Init();
   SystemClock_Config();
   MX_GPIO_Init();
@@ -169,21 +205,12 @@ int main(void)
   /* USER CODE BEGIN 2 */
   Set_Keyboard();
   oled_Init();
-
-  // Настройка пина динамика (PE9) как выход
-  __HAL_RCC_GPIOE_CLK_ENABLE();
-  GPIO_InitTypeDef GPIO_InitStruct = {0};
-  GPIO_InitStruct.Pin = GPIO_PIN_9;
-  GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
-  GPIO_InitStruct.Pull = GPIO_NOPULL;
-  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_HIGH;
-  HAL_GPIO_Init(GPIOE, &GPIO_InitStruct);
-  HAL_GPIO_WritePin(GPIOE, GPIO_PIN_9, GPIO_PIN_RESET);
   
+  MX_TIM1_Init(); // <-- ИЗМЕНЕНО
+
   update_display();
   /* USER CODE END 2 */
 
-  /* Infinite loop */
   /* USER CODE BEGIN WHILE */
   while (1)
   {
@@ -199,7 +226,6 @@ int main(void)
                 update_display();
             } 
             else if (key == '#') {
-                // 1. Парсинг введенных данных
                 uint32_t h = 0, m = 0, s = 0;
                 uint8_t is_valid = 1;
 
@@ -216,10 +242,9 @@ int main(void)
                     s = input_raw % 100;
                     if (m >= 60 || s >= 60) is_valid = 0;
                 } else {
-                    is_valid = 0; // Ничего не введено
+                    is_valid = 0;
                 }
 
-                // 2. Проверка валидности и запуск
                 if (is_valid) {
                     timer_value = (h * 3600) + (m * 60) + s;
                     if (timer_value > 0) {
@@ -227,14 +252,11 @@ int main(void)
                         last_tick = HAL_GetTick();
                         update_display();
                     } else {
-                        // Если ввели 00:00:00 и нажали #, просто очищаем
                         input_raw = 0;
                         input_digits = 0;
                         update_display();
                     }
                 } else {
-                    // НЕВЕРНЫЙ ВВОД (минуты или секунды >= 60)
-                    // Очищаем буфер ввода и обновляем экран (вернется к 00:00:00)
                     input_raw = 0;
                     input_digits = 0;
                     update_display();
@@ -262,13 +284,12 @@ int main(void)
                 timer_value = 0;
                 input_raw = 0;
                 input_digits = 0;
-                HAL_GPIO_WritePin(GPIOE, GPIO_PIN_9, GPIO_PIN_RESET); // Выкл звук
+                Buzzer_Off();
                 update_display();
             }
         }
     }
 
-    // Логика обратного отсчета (неблокирующая)
     if (timer_state == STATE_RUN) {
         if (HAL_GetTick() - last_tick >= 1000) {
             last_tick += 1000;
@@ -278,16 +299,9 @@ int main(void)
             }
             if (timer_value == 0) {
                 timer_state = STATE_ALARM;
+                Buzzer_On();
                 update_display();
             }
-        }
-    }
-
-    // Генерация звука (программный меандр ~500 Гц)
-    if (timer_state == STATE_ALARM) {
-        if (HAL_GetTick() - beep_tick > 1) {
-            beep_tick = HAL_GetTick();
-            HAL_GPIO_TogglePin(GPIOE, GPIO_PIN_9);
         }
     }
 
@@ -296,10 +310,6 @@ int main(void)
   /* USER CODE END 3 */
 }
 
-/**
-  * @brief System Clock Configuration
-  * @retval None
-  */
 void SystemClock_Config(void)
 {
   RCC_OscInitTypeDef RCC_OscInitStruct = {0};
@@ -337,16 +347,10 @@ void SystemClock_Config(void)
 /* USER CODE BEGIN 4 */
 /* USER CODE END 4 */
 
-/**
-  * @brief  This function is executed in case of error occurrence.
-  * @retval None
-  */
 void Error_Handler(void)
 {
-  /* USER CODE BEGIN Error_Handler_Debug */
   __disable_irq();
   while (1) { }
-  /* USER CODE END Error_Handler_Debug */
 }
 
 #ifdef  USE_FULL_ASSERT
